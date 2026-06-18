@@ -19,6 +19,8 @@ import {
   Target,
   Swords,
   MoreHorizontal,
+  Copy,
+  Star,
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/useAuthStore';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -33,9 +35,10 @@ import {
 } from '@/services/opportunity.service';
 import { getCustomerById } from '@/services/customer.service';
 import { getStages, getStageById } from '@/services/opportunity.service';
+import { getWarRoomByOpportunity, getScripts, createWarRoom } from '@/services/warroom.service';
 import { formatCurrency, formatDateTime, formatRelativeTime } from '@/utils/date';
 import { cn } from '@/lib/utils';
-import type { Opportunity, StageHistory, Stage, Activity, Competitor, Customer } from '@/types/models';
+import type { Opportunity, StageHistory, Stage, Activity, Competitor, Customer, WarRoom, Script, ScriptCategory } from '@/types/models';
 
 type TabType = 'info' | 'activities' | 'history' | 'competitors';
 
@@ -63,6 +66,23 @@ const activityTypeColors: Record<string, string> = {
   other: 'bg-slate-100 text-slate-600',
 };
 
+const stageToScriptCategory: Record<number, ScriptCategory> = {
+  1: 'opening',
+  2: 'objection',
+  3: 'comparison',
+  4: 'closing',
+  5: 'other',
+  6: 'other',
+};
+
+const scriptCategoryLabels: Record<ScriptCategory, string> = {
+  opening: '开场白',
+  objection: '异议处理',
+  comparison: '竞品对比',
+  closing: '逼单',
+  other: '其他',
+};
+
 export default function OpportunityDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -80,6 +100,9 @@ export default function OpportunityDetail() {
   const [showAddActivity, setShowAddActivity] = useState(false);
   const [activityType, setActivityType] = useState<'call' | 'visit' | 'email' | 'meeting' | 'other'>('call');
   const [activityContent, setActivityContent] = useState('');
+  const [warRoom, setWarRoom] = useState<WarRoom | null>(null);
+  const [scripts, setScripts] = useState<Script[]>([]);
+  const [copySuccess, setCopySuccess] = useState<string | null>(null);
 
   useEffect(() => {
     if (id && user?.tenantId) {
@@ -105,8 +128,18 @@ export default function OpportunityDetail() {
       setCompetitors(comps);
 
       if (opp) {
-        const cust = await getCustomerById(opp.customerId);
+        const [cust, wr] = await Promise.all([
+          getCustomerById(opp.customerId),
+          getWarRoomByOpportunity(opp.id),
+        ]);
         setCustomer(cust || null);
+        setWarRoom(wr || null);
+        if (wr) {
+          const scrs = await getScripts(wr.id);
+          setScripts(scrs);
+        } else {
+          setScripts([]);
+        }
       }
     } catch (err) {
       console.error('Failed to load opportunity:', err);
@@ -154,6 +187,34 @@ export default function OpportunityDetail() {
     } catch (err) {
       console.error('Failed to advance stage:', err);
     }
+  };
+
+  const handleCreateWarRoom = async () => {
+    if (!opportunity || !user) return;
+    try {
+      const wr = await createWarRoom({
+        tenantId: user.tenantId,
+        opportunityId: opportunity.id,
+        name: `${opportunity.name} - 作战室`,
+        objective: `攻坚商机：${opportunity.name}，金额 ${formatCurrency(opportunity.amount)}`,
+        status: 'active',
+        expectedEndDate: opportunity.expectedCloseDate,
+        members: [{ userId: user.id, role: 'commander', joinedAt: new Date().toISOString() }],
+        createdBy: user.id,
+      });
+      setWarRoom(wr);
+      navigate(`/warrooms/${wr.id}`);
+    } catch (err) {
+      console.error('Failed to create war room:', err);
+    }
+  };
+
+  const handleCopyScript = async (script: Script) => {
+    try {
+      await navigator.clipboard.writeText(script.content);
+      setCopySuccess(script.id);
+      setTimeout(() => setCopySuccess(null), 2000);
+    } catch {}
   };
 
   const getStageName = (stageId?: string) => {
@@ -230,6 +291,25 @@ export default function OpportunityDetail() {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          {warRoom ? (
+            <button
+              onClick={() => navigate(`/warrooms/${warRoom.id}`)}
+              className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white text-sm font-medium rounded-lg transition-colors shadow-lg shadow-orange-500/20"
+            >
+              <Swords size={16} />
+              进入作战室
+            </button>
+          ) : (
+            can('warrooms:create') && (
+              <button
+                onClick={handleCreateWarRoom}
+                className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white text-sm font-medium rounded-lg transition-colors shadow-lg shadow-orange-500/20"
+              >
+                <Swords size={16} />
+                创建作战室
+              </button>
+            )
+          )}
           {can('opportunities:edit') && currentStageIndex < stages.length - 1 && currentStageIndex !== -1 && (
             <button
               onClick={handleAdvanceStage}
@@ -297,6 +377,57 @@ export default function OpportunityDetail() {
           </p>
         </div>
       </div>
+
+      {(() => {
+        const currentStage = stages.find((s) => s.id === opportunity.stageId);
+        const category = stageToScriptCategory[currentStage?.order || 0] || 'other';
+        const recommendedScripts = scripts.filter((s) => s.category === category).slice(0, 3);
+        if (recommendedScripts.length === 0) return null;
+        return (
+          <div className="bg-gradient-to-r from-primary-50 to-blue-50 rounded-xl shadow-card p-5 border border-primary-100">
+            <div className="flex items-center gap-2 mb-4">
+              <MessageSquare size={18} className="text-primary-600" />
+              <h3 className="font-semibold text-slate-900">当前阶段推荐话术</h3>
+              <span className="px-2 py-0.5 bg-primary-100 text-primary-700 rounded text-xs font-medium">
+                {scriptCategoryLabels[category]}
+              </span>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              {recommendedScripts.map((script) => (
+                <div key={script.id} className="bg-white rounded-lg p-4 shadow-sm">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-medium text-slate-900">{script.scenario}</span>
+                    <button
+                      onClick={() => handleCopyScript(script)}
+                      className={cn(
+                        'p-1.5 rounded-lg transition-colors',
+                        copySuccess === script.id
+                          ? 'bg-green-100 text-green-600'
+                          : 'hover:bg-slate-100 text-slate-400 hover:text-slate-600'
+                      )}
+                    >
+                      <Copy size={14} />
+                    </button>
+                  </div>
+                  <p className="text-sm text-slate-600 line-clamp-3 whitespace-pre-wrap">{script.content}</p>
+                  <div className="flex items-center gap-2 mt-2">
+                    <div className="flex items-center gap-0.5">
+                      {[1, 2, 3, 4, 5].map((i) => (
+                        <Star
+                          key={i}
+                          size={12}
+                          className={i <= Math.round(script.rating) ? 'fill-amber-400 text-amber-400' : 'text-slate-300'}
+                        />
+                      ))}
+                    </div>
+                    <span className="text-xs text-slate-400">({script.ratingCount})</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
 
       <div className="bg-white rounded-xl shadow-card overflow-hidden">
         <div className="border-b border-slate-100">

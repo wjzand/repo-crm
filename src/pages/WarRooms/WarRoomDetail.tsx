@@ -76,6 +76,10 @@ import {
   createScript,
   updateScript,
   deleteScript,
+  getScriptComments,
+  createScriptComment,
+  deleteScriptComment,
+  rateScript,
   getBattles,
   createBattle,
   updateBattle,
@@ -101,6 +105,7 @@ import type {
   WarRoomTask,
   KnowledgeDoc,
   Script,
+  ScriptComment,
   Battle,
   BattleReport,
   WarRoomActivityLog,
@@ -814,6 +819,9 @@ function KnowledgeTab({ warRoomId, tenantId, knowledgeDocs, scripts, userId, onR
   const [editingScript, setEditingScript] = useState<Script | null>(null);
   const [scriptForm, setScriptForm] = useState({ scenario: '', content: '', category: 'opening' as ScriptCategory, notes: '' });
   const [copySuccess, setCopySuccess] = useState<string | null>(null);
+  const [expandedScriptId, setExpandedScriptId] = useState<string | null>(null);
+  const [scriptComments, setScriptComments] = useState<Record<string, ScriptComment[]>>({});
+  const [newComment, setNewComment] = useState<Record<string, string>>({});
 
   const subTabs: { key: KnowledgeSubTab; label: string }[] = [{ key: 'docs', label: '文档' }, { key: 'scripts', label: '话术库' }];
 
@@ -833,6 +841,42 @@ function KnowledgeTab({ warRoomId, tenantId, knowledgeDocs, scripts, userId, onR
   const handleDeleteScript = async (id: string) => { if (!confirm('确定删除？')) return; await deleteScript(id); onRefresh(); };
   const handleCopyScript = async (script: Script) => {
     try { await navigator.clipboard.writeText(script.content); setCopySuccess(script.id); setTimeout(() => setCopySuccess(null), 2000); } catch {}
+  };
+  const handleToggleComments = async (script: Script) => {
+    if (expandedScriptId === script.id) {
+      setExpandedScriptId(null);
+      return;
+    }
+    setExpandedScriptId(script.id);
+    const comments = await getScriptComments(script.id);
+    setScriptComments((prev) => ({ ...prev, [script.id]: comments }));
+  };
+  const handleAddComment = async (script: Script) => {
+    const content = newComment[script.id]?.trim();
+    if (!content) return;
+    const comment = await createScriptComment({
+      scriptId: script.id,
+      tenantId,
+      userId,
+      content,
+    });
+    setScriptComments((prev) => ({
+      ...prev,
+      [script.id]: [...(prev[script.id] || []), comment],
+    }));
+    setNewComment((prev) => ({ ...prev, [script.id]: '' }));
+  };
+  const handleDeleteComment = async (scriptId: string, commentId: string) => {
+    if (!confirm('确定删除此评论？')) return;
+    await deleteScriptComment(commentId);
+    setScriptComments((prev) => ({
+      ...prev,
+      [scriptId]: (prev[scriptId] || []).filter((c) => c.id !== commentId),
+    }));
+  };
+  const handleRateScript = async (script: Script, rating: number) => {
+    await rateScript(script.id, rating);
+    onRefresh();
   };
   const openEditDoc = (doc: KnowledgeDoc) => { setEditingDoc(doc); setDocForm({ title: doc.title, content: doc.content, type: doc.type }); setShowDocModal(true); };
   const openEditScript = (script: Script) => { setEditingScript(script); setScriptForm({ scenario: script.scenario, content: script.content, category: script.category, notes: script.notes || '' }); setShowScriptModal(true); };
@@ -925,6 +969,21 @@ function KnowledgeTab({ warRoomId, tenantId, knowledgeDocs, scripts, userId, onR
                         <div className="flex items-center justify-between mb-2">
                           <span className="text-sm font-medium text-slate-900">{script.scenario}</span>
                           <div className="flex items-center gap-1">
+                            <button
+                              onClick={() => handleToggleComments(script)}
+                              className={cn(
+                                'p-1.5 rounded-lg transition-colors flex items-center gap-1',
+                                expandedScriptId === script.id
+                                  ? 'bg-primary-100 text-primary-600'
+                                  : 'hover:bg-slate-100 text-slate-400 hover:text-slate-600'
+                              )}
+                              title="评论"
+                            >
+                              <MessageSquare size={14} />
+                              {(scriptComments[script.id]?.length || 0) > 0 && (
+                                <span className="text-xs font-medium">{scriptComments[script.id].length}</span>
+                              )}
+                            </button>
                             <button onClick={() => handleCopyScript(script)} className={cn('p-1.5 rounded-lg transition-colors', copySuccess === script.id ? 'bg-green-100 text-green-600' : 'hover:bg-slate-100 text-slate-400 hover:text-slate-600')}>
                               <Copy size={14} />
                             </button>
@@ -933,7 +992,58 @@ function KnowledgeTab({ warRoomId, tenantId, knowledgeDocs, scripts, userId, onR
                           </div>
                         </div>
                         <p className="text-sm text-slate-600 whitespace-pre-wrap">{script.content}</p>
-                        <div className="flex items-center gap-2 mt-2"><StarRating value={Math.round(script.rating)} readonly /><span className="text-xs text-slate-400">({script.ratingCount})</span></div>
+                        <div className="flex items-center justify-between mt-2">
+                          <div className="flex items-center gap-2">
+                            <StarRating value={Math.round(script.rating)} onChange={(v) => handleRateScript(script, v)} />
+                            <span className="text-xs text-slate-400">({script.ratingCount})</span>
+                          </div>
+                          {script.notes && <span className="text-xs text-slate-400 truncate ml-auto">{script.notes}</span>}
+                        </div>
+                        {expandedScriptId === script.id && (
+                          <div className="mt-4 pt-4 border-t border-slate-100 space-y-3">
+                            <div className="space-y-2">
+                              {(scriptComments[script.id] || []).length === 0 ? (
+                                <div className="text-center py-4 text-xs text-slate-400">暂无评论</div>
+                              ) : (
+                                (scriptComments[script.id] || []).map((comment) => (
+                                  <div key={comment.id} className="flex items-start gap-2">
+                                    <div className="w-7 h-7 rounded-full bg-gradient-to-br from-primary-300 to-primary-500 flex items-center justify-center text-white text-xs flex-shrink-0">
+                                      {comment.userId.charAt(0)}
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                      <div className="flex items-center justify-between">
+                                        <span className="text-xs font-medium text-slate-700">{comment.userId}</span>
+                                        <div className="flex items-center gap-2">
+                                          <span className="text-xs text-slate-400">{formatRelativeTime(comment.createdAt)}</span>
+                                          <button onClick={() => handleDeleteComment(script.id, comment.id)} className="p-0.5 hover:bg-slate-100 rounded text-slate-400 hover:text-danger-500">
+                                            <X size={12} />
+                                          </button>
+                                        </div>
+                                      </div>
+                                      <p className="text-sm text-slate-600 mt-0.5">{comment.content}</p>
+                                    </div>
+                                  </div>
+                                ))
+                              )}
+                            </div>
+                            <div className="flex gap-2">
+                              <input
+                                value={newComment[script.id] || ''}
+                                onChange={(e) => setNewComment((prev) => ({ ...prev, [script.id]: e.target.value }))}
+                                placeholder="添加评论..."
+                                className="flex-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                                onKeyDown={(e) => e.key === 'Enter' && handleAddComment(script)}
+                              />
+                              <button
+                                onClick={() => handleAddComment(script)}
+                                disabled={!newComment[script.id]?.trim()}
+                                className="px-4 py-2 bg-primary-500 hover:bg-primary-600 disabled:bg-slate-200 disabled:text-slate-400 text-white text-sm font-medium rounded-lg transition-colors"
+                              >
+                                发送
+                              </button>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -1369,32 +1479,38 @@ export default function WarRoomDetail() {
       )}
 
       {showMemberModal && (
-        <div className="bg-white rounded-xl shadow-card p-4 space-y-3">
-          <div className="flex items-center justify-between">
-            <h4 className="font-semibold text-slate-900">管理成员</h4>
-            <button onClick={() => setShowMemberModal(false)} className="p-1 hover:bg-slate-100 rounded"><X size={16} className="text-slate-400" /></button>
-          </div>
-          <div className="flex gap-2">
-            <select value={memberForm.userId} onChange={(e) => setMemberForm({ ...memberForm, userId: e.target.value })} className="flex-1 px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500">
-              <option value="">选择成员</option>
-              {teamMembers.filter((m) => !warRoom.members.some((wm) => wm.userId === m.id)).map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
-            </select>
-            <select value={memberForm.role} onChange={(e) => setMemberForm({ ...memberForm, role: e.target.value as any })} className="px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500">
-              <option value="commander">指挥官</option><option value="assault">突击手</option><option value="staff">参谋</option><option value="observer">观察员</option>
-            </select>
-            <button onClick={handleAddMember} className="px-4 py-2 bg-primary-500 hover:bg-primary-600 text-white text-sm font-medium rounded-lg"><UserPlus size={16} /></button>
-          </div>
-          <div className="space-y-2">
-            {warRoom.members.map((member) => (
-              <div key={member.userId} className="flex items-center justify-between p-2 bg-slate-50 rounded-lg">
-                <div className="flex items-center gap-2">
-                  <div className="w-7 h-7 rounded-full bg-gradient-to-br from-primary-300 to-primary-500 flex items-center justify-center text-white text-xs">{userMap[member.userId]?.charAt(0) || '?'}</div>
-                  <span className="text-sm font-medium text-slate-700">{userMap[member.userId] || '未知'}</span>
-                  <span className="px-1.5 py-0.5 bg-slate-200 rounded text-xs text-slate-600">{member.role === 'commander' ? '指挥官' : member.role === 'assault' ? '突击手' : member.role === 'staff' ? '参谋' : '观察员'}</span>
-                </div>
-                <button onClick={() => handleRemoveMember(member.userId)} className="p-1 hover:bg-slate-200 rounded"><X size={14} className="text-slate-400" /></button>
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 animate-fade-in" onClick={(e) => e.target === e.currentTarget && setShowMemberModal(false)}>
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg mx-4 animate-slide-up max-h-[80vh] overflow-y-auto">
+            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+              <h4 className="font-semibold text-slate-900">管理成员</h4>
+              <button onClick={() => setShowMemberModal(false)} className="p-1 hover:bg-slate-100 rounded"><X size={16} className="text-slate-400" /></button>
+            </div>
+            <div className="px-6 py-4 space-y-4">
+              <div className="flex gap-2">
+                <select value={memberForm.userId} onChange={(e) => setMemberForm({ ...memberForm, userId: e.target.value })} className="flex-1 px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500">
+                  <option value="">选择成员</option>
+                  {teamMembers.filter((m) => !warRoom.members.some((wm) => wm.userId === m.id)).map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+                </select>
+                <select value={memberForm.role} onChange={(e) => setMemberForm({ ...memberForm, role: e.target.value as any })} className="px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500">
+                  <option value="commander">指挥官</option><option value="assault">突击手</option><option value="staff">参谋</option><option value="observer">观察员</option>
+                </select>
+                <button onClick={handleAddMember} className="px-4 py-2 bg-primary-500 hover:bg-primary-600 text-white text-sm font-medium rounded-lg flex items-center gap-1"><UserPlus size={16} />添加</button>
               </div>
-            ))}
+              <div className="space-y-2">
+                {warRoom.members.map((member) => (
+                  <div key={member.userId} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl">
+                    <div className="flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-full bg-gradient-to-br from-primary-300 to-primary-500 flex items-center justify-center text-white text-sm">{userMap[member.userId]?.charAt(0) || '?'}</div>
+                      <div>
+                        <span className="text-sm font-medium text-slate-700">{userMap[member.userId] || '未知'}</span>
+                        <span className="ml-2 px-2 py-0.5 bg-slate-200 rounded text-xs text-slate-600">{member.role === 'commander' ? '指挥官' : member.role === 'assault' ? '突击手' : member.role === 'staff' ? '参谋' : '观察员'}</span>
+                      </div>
+                    </div>
+                    <button onClick={() => handleRemoveMember(member.userId)} className="p-1.5 hover:bg-slate-200 rounded-lg text-slate-400 hover:text-danger-500"><X size={16} /></button>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
       )}

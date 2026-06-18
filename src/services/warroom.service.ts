@@ -9,6 +9,7 @@ import type {
   WarRoomTask,
   KnowledgeDoc,
   Script,
+  ScriptComment,
   Battle,
   BattleMessage,
   BattleReport,
@@ -571,6 +572,29 @@ export async function rateScript(id: string, rating: number): Promise<Script | u
   };
   await db.put('scripts', updated);
   return updated;
+}
+
+export async function getScriptComments(scriptId: string): Promise<ScriptComment[]> {
+  const db = getDB();
+  const comments = await db.getAllFromIndex('scriptComments', 'by-script', scriptId);
+  return comments.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+}
+
+export async function createScriptComment(data: Omit<ScriptComment, 'id' | 'createdAt'>): Promise<ScriptComment> {
+  const db = getDB();
+  const now = new Date().toISOString();
+  const comment: ScriptComment = {
+    ...data,
+    id: generateId(),
+    createdAt: now,
+  };
+  await db.add('scriptComments', comment);
+  return comment;
+}
+
+export async function deleteScriptComment(id: string): Promise<void> {
+  const db = getDB();
+  await db.delete('scriptComments', id);
 }
 
 export async function getBattles(warRoomId: string): Promise<Battle[]> {

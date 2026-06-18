@@ -18,6 +18,7 @@ import type {
   WarRoomTask,
   KnowledgeDoc,
   Script,
+  ScriptComment,
   Battle,
   BattleReport,
   WarRoomActivityLog,
@@ -117,6 +118,11 @@ interface CRMDBSchema extends DBSchema {
     value: Script;
     indexes: { 'by-war-room': string; 'by-tenant': string; 'by-category': string };
   };
+  scriptComments: {
+    key: string;
+    value: ScriptComment;
+    indexes: { 'by-script': string; 'by-tenant': string };
+  };
   battles: {
     key: string;
     value: Battle;
@@ -150,7 +156,7 @@ interface CRMDBSchema extends DBSchema {
 }
 
 const DB_NAME = 'crm-db';
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 
 let db: IDBPDatabase<CRMDBSchema> | null = null;
 
@@ -274,6 +280,12 @@ export async function initDB(): Promise<IDBPDatabase<CRMDBSchema>> {
         scStore.createIndex('by-war-room', 'warRoomId');
         scStore.createIndex('by-tenant', 'tenantId');
         scStore.createIndex('by-category', 'category');
+      }
+
+      if (!db.objectStoreNames.contains('scriptComments')) {
+        const sccStore = db.createObjectStore('scriptComments', { keyPath: 'id' });
+        sccStore.createIndex('by-script', 'scriptId');
+        sccStore.createIndex('by-tenant', 'tenantId');
       }
 
       if (!db.objectStoreNames.contains('battles')) {
