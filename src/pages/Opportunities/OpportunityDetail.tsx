@@ -29,6 +29,7 @@ import {
   getCompetitors,
   deleteOpportunity,
   createActivity,
+  updateOpportunityStage,
 } from '@/services/opportunity.service';
 import { getCustomerById } from '@/services/customer.service';
 import { getStages, getStageById } from '@/services/opportunity.service';
@@ -138,6 +139,23 @@ export default function OpportunityDetail() {
     navigate('/opportunities');
   };
 
+  const handleAdvanceStage = async () => {
+    if (!opportunity || !user) return;
+    const currentIndex = stages.findIndex((s) => s.id === opportunity.stageId);
+    if (currentIndex === -1 || currentIndex >= stages.length - 1) return;
+    const nextStage = stages[currentIndex + 1];
+    if (!confirm(`确定将商机推进到【${nextStage.name}】阶段吗？`)) return;
+    try {
+      const updated = await updateOpportunityStage(opportunity.id, nextStage.id, user.id);
+      if (updated) {
+        setOpportunity(updated);
+        loadData();
+      }
+    } catch (err) {
+      console.error('Failed to advance stage:', err);
+    }
+  };
+
   const getStageName = (stageId?: string) => {
     if (!stageId) return '';
     return stages.find((s) => s.id === stageId)?.name || '未知';
@@ -212,6 +230,15 @@ export default function OpportunityDetail() {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          {can('opportunities:edit') && currentStageIndex < stages.length - 1 && currentStageIndex !== -1 && (
+            <button
+              onClick={handleAdvanceStage}
+              className="flex items-center gap-2 px-4 py-2 bg-green-500 hover:bg-green-600 text-white text-sm font-medium rounded-lg transition-colors shadow-lg shadow-green-500/20"
+            >
+              <ChevronRight size={16} />
+              推进到下一阶段
+            </button>
+          )}
           {can('opportunities:edit') && (
             <button
               onClick={() => navigate(`/opportunities/${opportunity.id}/edit`)}

@@ -34,6 +34,7 @@ import {
   verticalListSortingStrategy,
   useSortable,
 } from '@dnd-kit/sortable';
+import { useDroppable } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
 import { useAuthStore } from '@/stores/useAuthStore';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -176,6 +177,9 @@ function KanbanColumn({
   onAddClick: (stageId: string) => void;
 }) {
   const totalAmount = opportunities.reduce((sum, o) => sum + o.amount, 0);
+  const { setNodeRef, isOver } = useDroppable({
+    id: stage.id,
+  });
 
   return (
     <div className="flex-shrink-0 w-72">
@@ -196,7 +200,11 @@ function KanbanColumn({
       </div>
       <div className="text-xs text-slate-500 mb-3">金额：{formatCurrency(totalAmount)}</div>
       <div
-        className="bg-slate-100/50 rounded-xl p-2 min-h-[200px] space-y-2"
+        ref={setNodeRef}
+        className={cn(
+          'bg-slate-100/50 rounded-xl p-2 min-h-[200px] space-y-2 transition-colors',
+          isOver && 'ring-2 ring-primary-400 bg-primary-50/50'
+        )}
         style={{ borderTop: `3px solid ${stage.color}` }}
       >
         <SortableContext items={opportunities.map((o) => o.id)} strategy={verticalListSortingStrategy}>
@@ -317,16 +325,28 @@ export default function Opportunities() {
     const overId = over.id as string;
 
     const activeOpp = opportunities.find((o) => o.id === oppId);
-    const overOpp = opportunities.find((o) => o.id === overId);
+    if (!activeOpp) return;
 
-    if (!activeOpp || !overOpp) return;
-    if (activeOpp.stageId === overOpp.stageId) return;
+    let targetStageId: string | null = null;
+
+    const overOpp = opportunities.find((o) => o.id === overId);
+    if (overOpp) {
+      targetStageId = overOpp.stageId;
+    } else {
+      const stage = stages.find((s) => s.id === overId);
+      if (stage) {
+        targetStageId = stage.id;
+      }
+    }
+
+    if (!targetStageId) return;
+    if (activeOpp.stageId === targetStageId) return;
 
     try {
-      await updateOpportunityStage(oppId, overOpp.stageId, user?.id || '');
+      await updateOpportunityStage(oppId, targetStageId, user?.id || '');
       setOpportunities(
         opportunities.map((o) =>
-          o.id === oppId ? { ...o, stageId: overOpp.stageId } : o
+          o.id === oppId ? { ...o, stageId: targetStageId! } : o
         )
       );
     } catch (err) {

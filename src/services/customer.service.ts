@@ -47,7 +47,7 @@ export async function deleteCustomer(id: string): Promise<void> {
   const customer = await db.get('customers', id);
   if (!customer) return;
   
-  const tx = db.transaction(['customers', 'contacts', 'activities'], 'readwrite');
+  const tx = db.transaction(['customers', 'contacts', 'activities', 'opportunities', 'stageHistories', 'competitors'], 'readwrite');
   await tx.objectStore('customers').delete(id);
   
   const contacts = await tx.objectStore('contacts').index('by-customer').getAll([customer.tenantId, id]);
@@ -58,6 +58,27 @@ export async function deleteCustomer(id: string): Promise<void> {
   const activities = await tx.objectStore('activities').index('by-customer').getAll([customer.tenantId, id]);
   for (const activity of activities) {
     await tx.objectStore('activities').delete(activity.id);
+  }
+  
+  const opportunities = await tx.objectStore('opportunities').index('by-customer').getAll([customer.tenantId, id]);
+  for (const opp of opportunities) {
+    const oppId = opp.id;
+    await tx.objectStore('opportunities').delete(oppId);
+    
+    const histories = await tx.objectStore('stageHistories').index('by-opportunity').getAll(oppId);
+    for (const h of histories) {
+      await tx.objectStore('stageHistories').delete(h.id);
+    }
+    
+    const competitors = await tx.objectStore('competitors').index('by-opportunity').getAll(oppId);
+    for (const c of competitors) {
+      await tx.objectStore('competitors').delete(c.id);
+    }
+    
+    const oppActivities = await tx.objectStore('activities').index('by-opportunity').getAll([customer.tenantId, oppId]);
+    for (const a of oppActivities) {
+      await tx.objectStore('activities').delete(a.id);
+    }
   }
   
   await tx.done;
