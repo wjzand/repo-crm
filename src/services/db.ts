@@ -13,6 +13,17 @@ import type {
   LeadSource,
   CustomerLevelConfig,
   Competitor,
+  WarRoom,
+  Milestone,
+  WarRoomTask,
+  KnowledgeDoc,
+  Script,
+  Battle,
+  BattleReport,
+  WarRoomActivityLog,
+  DecisionNode,
+  Requirement,
+  CompetitiveAnalysis,
 } from '@/types/models';
 
 interface CRMDBSchema extends DBSchema {
@@ -81,10 +92,65 @@ interface CRMDBSchema extends DBSchema {
     value: Competitor;
     indexes: { 'by-opportunity': string; 'by-tenant': string };
   };
+  warRooms: {
+    key: string;
+    value: WarRoom;
+    indexes: { 'by-tenant': string; 'by-opportunity': string; 'by-tenant-status': [string, string] };
+  };
+  milestones: {
+    key: string;
+    value: Milestone;
+    indexes: { 'by-war-room': string; 'by-tenant': string };
+  };
+  warRoomTasks: {
+    key: string;
+    value: WarRoomTask;
+    indexes: { 'by-milestone': string; 'by-war-room': string; 'by-tenant': string; 'by-assignee': string };
+  };
+  knowledgeDocs: {
+    key: string;
+    value: KnowledgeDoc;
+    indexes: { 'by-war-room': string; 'by-tenant': string };
+  };
+  scripts: {
+    key: string;
+    value: Script;
+    indexes: { 'by-war-room': string; 'by-tenant': string; 'by-category': string };
+  };
+  battles: {
+    key: string;
+    value: Battle;
+    indexes: { 'by-war-room': string; 'by-tenant': string };
+  };
+  battleReports: {
+    key: string;
+    value: BattleReport;
+    indexes: { 'by-war-room': string; 'by-tenant': string };
+  };
+  warRoomActivityLogs: {
+    key: string;
+    value: WarRoomActivityLog;
+    indexes: { 'by-war-room': string; 'by-tenant': string };
+  };
+  decisionNodes: {
+    key: string;
+    value: DecisionNode;
+    indexes: { 'by-war-room': string; 'by-tenant': string };
+  };
+  requirements: {
+    key: string;
+    value: Requirement;
+    indexes: { 'by-war-room': string; 'by-tenant': string };
+  };
+  competitiveAnalyses: {
+    key: string;
+    value: CompetitiveAnalysis;
+    indexes: { 'by-war-room': string; 'by-tenant': string };
+  };
 }
 
 const DB_NAME = 'crm-db';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 let db: IDBPDatabase<CRMDBSchema> | null = null;
 
@@ -174,6 +240,76 @@ export async function initDB(): Promise<IDBPDatabase<CRMDBSchema>> {
         const compStore = db.createObjectStore('competitors', { keyPath: 'id' });
         compStore.createIndex('by-opportunity', 'opportunityId');
         compStore.createIndex('by-tenant', 'tenantId');
+      }
+
+      if (!db.objectStoreNames.contains('warRooms')) {
+        const wrStore = db.createObjectStore('warRooms', { keyPath: 'id' });
+        wrStore.createIndex('by-tenant', 'tenantId');
+        wrStore.createIndex('by-opportunity', 'opportunityId');
+        wrStore.createIndex('by-tenant-status', ['tenantId', 'status']);
+      }
+
+      if (!db.objectStoreNames.contains('milestones')) {
+        const msStore = db.createObjectStore('milestones', { keyPath: 'id' });
+        msStore.createIndex('by-war-room', 'warRoomId');
+        msStore.createIndex('by-tenant', 'tenantId');
+      }
+
+      if (!db.objectStoreNames.contains('warRoomTasks')) {
+        const taskStore = db.createObjectStore('warRoomTasks', { keyPath: 'id' });
+        taskStore.createIndex('by-milestone', 'milestoneId');
+        taskStore.createIndex('by-war-room', 'warRoomId');
+        taskStore.createIndex('by-tenant', 'tenantId');
+        taskStore.createIndex('by-assignee', 'assigneeId');
+      }
+
+      if (!db.objectStoreNames.contains('knowledgeDocs')) {
+        const kdStore = db.createObjectStore('knowledgeDocs', { keyPath: 'id' });
+        kdStore.createIndex('by-war-room', 'warRoomId');
+        kdStore.createIndex('by-tenant', 'tenantId');
+      }
+
+      if (!db.objectStoreNames.contains('scripts')) {
+        const scStore = db.createObjectStore('scripts', { keyPath: 'id' });
+        scStore.createIndex('by-war-room', 'warRoomId');
+        scStore.createIndex('by-tenant', 'tenantId');
+        scStore.createIndex('by-category', 'category');
+      }
+
+      if (!db.objectStoreNames.contains('battles')) {
+        const btStore = db.createObjectStore('battles', { keyPath: 'id' });
+        btStore.createIndex('by-war-room', 'warRoomId');
+        btStore.createIndex('by-tenant', 'tenantId');
+      }
+
+      if (!db.objectStoreNames.contains('battleReports')) {
+        const brStore = db.createObjectStore('battleReports', { keyPath: 'id' });
+        brStore.createIndex('by-war-room', 'warRoomId');
+        brStore.createIndex('by-tenant', 'tenantId');
+      }
+
+      if (!db.objectStoreNames.contains('warRoomActivityLogs')) {
+        const logStore = db.createObjectStore('warRoomActivityLogs', { keyPath: 'id' });
+        logStore.createIndex('by-war-room', 'warRoomId');
+        logStore.createIndex('by-tenant', 'tenantId');
+      }
+
+      if (!db.objectStoreNames.contains('decisionNodes')) {
+        const dnStore = db.createObjectStore('decisionNodes', { keyPath: 'id' });
+        dnStore.createIndex('by-war-room', 'warRoomId');
+        dnStore.createIndex('by-tenant', 'tenantId');
+      }
+
+      if (!db.objectStoreNames.contains('requirements')) {
+        const reqStore = db.createObjectStore('requirements', { keyPath: 'id' });
+        reqStore.createIndex('by-war-room', 'warRoomId');
+        reqStore.createIndex('by-tenant', 'tenantId');
+      }
+
+      if (!db.objectStoreNames.contains('competitiveAnalyses')) {
+        const caStore = db.createObjectStore('competitiveAnalyses', { keyPath: 'id' });
+        caStore.createIndex('by-war-room', 'warRoomId');
+        caStore.createIndex('by-tenant', 'tenantId');
       }
     },
   });

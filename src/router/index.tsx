@@ -15,6 +15,8 @@ import OpportunityForm from '@/pages/Opportunities/OpportunityForm';
 import Funnel from '@/pages/Funnel';
 import Team from '@/pages/Team';
 import Settings from '@/pages/Settings';
+import WarRooms from '@/pages/WarRooms';
+import WarRoomDetail from '@/pages/WarRooms/WarRoomDetail';
 import { usePermissions } from '@/hooks/usePermissions';
 
 function ProtectedRoute({ children, permission }: { children: React.ReactNode; permission?: string }) {
@@ -58,6 +60,8 @@ export default function AppRouter() {
           <Route path="opportunities/new" element={<OpportunityForm />} />
           <Route path="opportunities/:id" element={<OpportunityDetail />} />
           <Route path="funnel" element={<Funnel />} />
+          <Route path="warrooms" element={<WarRooms />} />
+          <Route path="warrooms/:id" element={<WarRoomDetail />} />
           <Route
             path="team"
             element={

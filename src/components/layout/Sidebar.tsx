@@ -9,6 +9,7 @@ import {
   Settings,
   ChevronLeft,
   ChevronRight,
+  Swords,
 } from 'lucide-react';
 import { useUIStore } from '@/stores/useUIStore';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -32,6 +33,7 @@ export default function Sidebar() {
     { path: '/leads', label: '线索池', icon: <Target size={20} /> },
     { path: '/opportunities', label: '商机管理', icon: <DollarSign size={20} /> },
     { path: '/funnel', label: '销售漏斗', icon: <PieChart size={20} /> },
+    { path: '/warrooms', label: '作战室', icon: <Swords size={20} />, permission: 'warrooms:view' },
   ];
 
   const adminItems: NavItem[] = [
