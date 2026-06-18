@@ -5,10 +5,13 @@ import Login from '@/pages/Login';
 import Dashboard from '@/pages/Dashboard';
 import Customers from '@/pages/Customers';
 import CustomerDetail from '@/pages/Customers/CustomerDetail';
+import CustomerForm from '@/pages/Customers/CustomerForm';
 import Leads from '@/pages/Leads';
 import LeadDetail from '@/pages/Leads/LeadDetail';
+import LeadForm from '@/pages/Leads/LeadForm';
 import Opportunities from '@/pages/Opportunities';
 import OpportunityDetail from '@/pages/Opportunities/OpportunityDetail';
+import OpportunityForm from '@/pages/Opportunities/OpportunityForm';
 import Funnel from '@/pages/Funnel';
 import Team from '@/pages/Team';
 import Settings from '@/pages/Settings';
@@ -45,10 +48,14 @@ export default function AppRouter() {
           <Route index element={<Navigate to="/dashboard" replace />} />
           <Route path="dashboard" element={<Dashboard />} />
           <Route path="customers" element={<Customers />} />
+          <Route path="customers/new" element={<CustomerForm />} />
           <Route path="customers/:id" element={<CustomerDetail />} />
+          <Route path="customers/:id/edit" element={<CustomerForm />} />
           <Route path="leads" element={<Leads />} />
+          <Route path="leads/new" element={<LeadForm />} />
           <Route path="leads/:id" element={<LeadDetail />} />
           <Route path="opportunities" element={<Opportunities />} />
+          <Route path="opportunities/new" element={<OpportunityForm />} />
           <Route path="opportunities/:id" element={<OpportunityDetail />} />
           <Route path="funnel" element={<Funnel />} />
           <Route
